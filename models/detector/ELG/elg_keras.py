@@ -1,7 +1,8 @@
-from keras.layers import *
-from keras.models import Model
-import tensorflow as tf
+from tensorflow.keras.layers import Input, ReLU, Conv2D, BatchNormalization, MaxPooling2D, Add, Lambda
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers.experimental.preprocessing import Resizing
 import numpy as np
+from scipy.special import softmax
 
 DOWNSCALE = 3 # ELG downscale input image by 3x
 
@@ -30,7 +31,7 @@ class KerasELG():
         n = self._hg_num_feature_maps
         pre_conv1 = self._apply_conv(inp, n, k=7, s=self._first_layer_stride, name="hourglass_pre")
         pre_conv1 = self._apply_bn(pre_conv1, name="hourglass_pre_BatchNorm")        
-        pre_conv1 = Activation('relu')(pre_conv1)
+        pre_conv1 = ReLU()(pre_conv1)
         pre_res1 = self._build_residual_block(pre_conv1, 2*n, name="hourglass_pre_res1")
         pre_res2 = self._build_residual_block(pre_res1, n, name="hourglass_pre_res2")
         
@@ -65,13 +66,13 @@ class KerasELG():
         half_num_out = max(int(f/2), 1)
         c = x
         conv1 = self._apply_bn(c, name=name+"_conv1_BatchNorm")
-        conv1 = Activation('relu')(conv1)
+        conv1 = ReLU()(conv1)
         conv1 = self._apply_conv(conv1, half_num_out, k=1, s=1, name=name+"_conv1")
         conv2 = self._apply_bn(conv1, name=name+"_conv2_BatchNorm")
-        conv2 = Activation('relu')(conv2)
+        conv2 = ReLU()(conv2)
         conv2 = self._apply_conv(conv2, half_num_out, k=3, s=1, name=name+"_conv2")
         conv3 = self._apply_bn(conv2, name=name+"_conv3_BatchNorm")
-        conv3 = Activation('relu')(conv3)
+        conv3 = ReLU()(conv3)
         conv3 = self._apply_conv(conv3, f, k=1, s=1, name=name+"_conv3")
         
         if num_in == f:
@@ -109,12 +110,8 @@ class KerasELG():
             low3 = self._build_residual_block(low3, f, name=prefix_name+f"_low3_{str(i+1)}")
             
         # Upsample
-        up2 = Lambda(
-            lambda x: tf.image.resize_bilinear(
-                x[0],
-                x[1].shape.as_list()[1:3], 
-                align_corners=True))([low3, up1]) # default resize_bilinear
-        
+        up2 = Resizing(*up1.shape[1:3])(low3)
+
         out = Add()([up1, up2])
         return out
     
@@ -128,7 +125,7 @@ class KerasELG():
                 name=prefix_name+f"_after_hg_{str(j+1)}")
         x_now = self._apply_conv(x_now, self._hg_num_feature_maps, k=1, s=1, name=prefix_name)
         x_now = self._apply_bn(x_now, name=prefix_name+"_BatchNorm")
-        x_now = Activation('relu')(x_now)
+        x_now = ReLU()(x_now)
         
         h = self._apply_conv(x_now, self._hg_num_landmarks, k=1, s=1, name=prefix_name+"_hmap")
         
@@ -153,11 +150,6 @@ class KerasELG():
     
     @staticmethod
     def _calculate_landmarks(lms, beta=5e1, eye_roi=None, net_input_size=(108,180)):
-        def np_softmax(x, axis=1):
-            t = np.exp(x)
-            a = np.exp(x) / np.sum(t, axis=axis).reshape(-1,1)
-            return a
-
         if len(lms.shape) < 4:
             lms = lms[None, ...]
         h, w = lms.shape[1:3]
@@ -168,10 +160,9 @@ class KerasELG():
         ref_ys = np.reshape(ref_ys, [-1, h*w])
 
         # Assuming N x 18 x 45 x 75 (NCHW)
-        beta = beta
         lms = np.transpose(lms, (0, 3, 1, 2))
         lms = np.reshape(lms, [-1, 18, h*w])
-        lms = np_softmax(beta * lms, axis=-1)
+        lms = softmax(beta * lms, axis=-1)
         lmrk_xs = np.sum(ref_xs * lms, axis=2)
         lmrk_ys = np.sum(ref_ys * lms, axis=2)
 
