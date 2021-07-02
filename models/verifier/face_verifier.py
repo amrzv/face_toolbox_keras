@@ -1,7 +1,8 @@
 from .facenet.inception_resnet_v1 import InceptionResNetV1
-from keras.layers import Lambda, Input
-from keras.models import Model
-from keras import backend as K
+from tensorflow.keras.layers import Lambda, Input
+from tensorflow.keras.models import Model
+from tensorflow.keras import backend as K
+from tensorflow.keras.layers.experimental.preprocessing import Resizing, Rescaling
 import tensorflow as tf
 import numpy as np
 from scipy.spatial import distance
@@ -44,15 +45,11 @@ class FaceVerifier():
                 since the output shape is [batch_size, 1, 1, 1].
             """
             x = (x - 127.5) / 128
-            x = K.map_fn(lambda im: tf.image.per_image_standardization(im), x)
+            x = tf.map_fn(lambda im: tf.image.per_image_standardization(im), x)
             return x     
         
         input_tensor = Input((None, None, 3))      
-        x = Lambda(
-            lambda x: tf.image.resize_bilinear(
-                x, 
-                [self.input_resolution, self.input_resolution]
-            ))(input_tensor)
+        x = Resizing(self.input_resolution, self.input_resolution)(input_tensor)
         output_tensor = Lambda(preprocess_facenet)(x)        
         return Model(input_tensor, output_tensor)
     
@@ -60,11 +57,9 @@ class FaceVerifier():
         """
             Scale image fomr range [-1, +1] to [0, 255].
         """
-        def scale(x):
-            return (x + 1) / 2 * 255
-        
+
         input_tensor = Input((None, None, 3))  
-        output_tensor = Lambda(scale)(input_tensor)
+        output_tensor = Rescaling(scale=255/2, offset=255/2)(input_tensor)
         return Model(input_tensor, output_tensor)
     
     def l2_norm(self):            
@@ -107,5 +102,3 @@ class FaceVerifier():
     @staticmethod
     def compute_cosine_distance(emb1, emb2):
         return distance.cosine(emb1, emb2)
-        
-        
