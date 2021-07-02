@@ -1,5 +1,5 @@
 import numpy as np
-import scipy
+from scipy.special import softmax
 from .model import s3fd_keras
 
 class S3FD():
@@ -15,15 +15,12 @@ class S3FD():
         return bboxlist
     
     def detect(self, net, img):    
-        def softmax(x, axis=-1):
-            return np.exp(x - scipy.special.logsumexp(x, axis=axis, keepdims=True))
         img = img - np.array([104, 117, 123])
         if img.ndim == 3:
             img = img[np.newaxis, ...]
         elif img.ndim == 5:
             img = np.squeeze(img)
 
-        BB, HH, WW, CC = img.shape
         olist = net.predict(img) # output a list of 12 predicitons in different resolution
 
         bboxlist = []
@@ -32,20 +29,18 @@ class S3FD():
         olist = [oelem for oelem in olist]
         for i in range(len(olist) // 2):
             ocls, oreg = olist[i * 2], olist[i * 2 + 1]
-            FB, FH, FW, FC = ocls.shape  # feature map size
             stride = 2**(i + 2)    # 4,8,16,32,64,128
-            anchor = stride * 4
             poss = zip(*np.where(ocls[:, :, :, 1] > 0.05))
-            for Iindex, hindex, windex in poss:
+            for _, hindex, windex in poss:
                 axc, ayc = stride / 2 + windex * stride, stride / 2 + hindex * stride
-                score = ocls[0:1, hindex, windex, 1]
-                loc = oreg[0:1, hindex, windex, :]
+                score = ocls[:1, hindex, windex, 1]
+                loc = oreg[:1, hindex, windex, :]
                 priors = np.array([[axc / 1.0, ayc / 1.0, stride * 4 / 1.0, stride * 4 / 1.0]])
                 variances = [0.1, 0.2]
                 box = self.decode(loc, priors, variances)
                 x1, y1, x2, y2 = box[0] * 1.0
                 bboxlist.append([x1, y1, x2, y2, score])
-        bboxlist = np.array(bboxlist)
+        bboxlist = np.array(bboxlist, dtype='object')
         if 0 == len(bboxlist):
             bboxlist = np.zeros((1, 5))            
         return bboxlist
