@@ -1,13 +1,13 @@
-from keras.layers import *
-from keras.models import Model
-import tensorflow as tf
+from tensorflow.keras.layers import Conv2D, BatchNormalization, ReLU, Add, ZeroPadding2D, GlobalAveragePooling2D, Multiply, Reshape, Activation, Concatenate, Input, MaxPooling2D
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers.experimental.preprocessing import Resizing
 
 def conv_block(x, f, k, s=1, block_name="", layer_id="", use_activ=True):
     if k != 1:
         x = ZeroPadding2D(1)(x)
     x = Conv2D(f, k, strides=s, padding='valid', use_bias=False, name=block_name+".conv"+layer_id)(x)
     x = BatchNormalization(epsilon=1e-5, name=block_name+".bn"+layer_id)(x)
-    x = Activation("relu")(x) if use_activ else x
+    x = ReLU()(x) if use_activ else x
     return x
 
 def res_block_with_downsampling(x, f, block_name="cp.resnet.layerN"):
@@ -16,19 +16,19 @@ def res_block_with_downsampling(x, f, block_name="cp.resnet.layerN"):
     x = conv_block(x, f, 3, s=2, block_name=block_name+".0", layer_id="1")
     x = conv_block(x, f, 3, block_name=block_name+".0", layer_id="2", use_activ=False)
     x = Add()([x, skip])
-    x = Activation("relu")(x)
+    x = ReLU()(x)
     
     skip = x
     x = conv_block(x, f, 3, block_name=block_name+".1", layer_id="1")
     x = conv_block(x, f, 3, block_name=block_name+".1", layer_id="2", use_activ=False)
     x = Add()([x, skip])
-    x = Activation("relu")(x)
+    x = ReLU()(x)
     return x
 
 def attention_refinment_block(x, f, block_name="cp.arm16"):
     x = Conv2D(f, 3, padding='same', use_bias=False, name=block_name+".conv.conv")(x)
     x = BatchNormalization(epsilon=1e-5, name=block_name+".conv.bn")(x)
-    x = Activation("relu")(x)
+    x = ReLU()(x)
     
     attn = GlobalAveragePooling2D()(x)
     attn = Reshape((1,1,f))(attn)
@@ -44,7 +44,7 @@ def feature_fusion_block(x1, x2):
     attn = GlobalAveragePooling2D()(x)
     attn = Reshape((1,1,256))(attn)
     attn = Conv2D(64, 1, use_bias=False, name="ffm.conv1")(attn)
-    attn = Activation("relu")(attn)
+    attn = ReLU()(attn)
     attn = Conv2D(256, 1, use_bias=False, name="ffm.conv2")(attn)
     feat_attn = Activation("sigmoid")(attn)
     attn = Multiply()([x, feat_attn])    
@@ -52,10 +52,7 @@ def feature_fusion_block(x1, x2):
     return x
 
 def upsampling(x, shape, interpolation="nearest"):    
-    if interpolation == "nearest":
-        return Lambda(lambda t: tf.image.resize_nearest_neighbor(t, shape, align_corners=True))(x)
-    elif interpolation == "bilinear":
-        return Lambda(lambda t: tf.image.resize_bilinear(t, shape, align_corners=True))(x)
+    return Resizing(*shape, interpolation=interpolation)(x)
 
 def maxpool(x, k=3, s=2, pad=1):
     x = ZeroPadding2D(pad)(x)
@@ -75,12 +72,12 @@ def BiSeNet_keras(input_resolution=512):
     x = conv_block(x, 64, 3, block_name="cp.resnet.layer1.0", layer_id="1")
     x = conv_block(x, 64, 3, block_name="cp.resnet.layer1.0", layer_id="2", use_activ=False)
     x = Add()([x, skip])
-    x = Activation("relu")(x)
+    x = ReLU()(x)
     skip = x
     x = conv_block(x, 64, 3, block_name="cp.resnet.layer1.1", layer_id="1")
     x = conv_block(x, 64, 3, block_name="cp.resnet.layer1.1", layer_id="2", use_activ=False)
     x = Add()([x, skip])
-    x = Activation("relu")(x)
+    x = ReLU()(x)
     
     # layer2
     x = res_block_with_downsampling(x, 128, block_name="cp.resnet.layer2")
@@ -95,7 +92,6 @@ def BiSeNet_keras(input_resolution=512):
     
     # layer4
     x = res_block_with_downsampling(x, 512, block_name="cp.resnet.layer4")   
-    feat32 = x 
     
     # ARM2 and conv_avg
     conv_avg = GlobalAveragePooling2D()(x)
