@@ -1,8 +1,6 @@
 import cv2
 import numpy as np
 from pathlib import Path
-import tensorflow as tf
-from keras import backend as K
 
 from .s3fd.s3fd_detector import S3FD
 from .landmarks_detector import FANLandmarksDetector
@@ -38,7 +36,7 @@ class FaceAlignmentDetector(BaseFaceDetector):
         elif fd_type.lower() == "mtcnn":
             raise NotImplementedError
         else:
-            raise ValueError(f"Unknown face detector {face_detector}.")
+            raise ValueError(f"Unknown face detector {fd_type.lower()}.")
         
         self.lmd_weights_path = lmd_weights_path
         self.lmd = None
@@ -82,7 +80,7 @@ class FaceAlignmentDetector(BaseFaceDetector):
     @staticmethod
     def preprocess_s3fd_bbox(bbox_list):
         # Convert coord (y0, x0, y1, x1) to (x0, y0, x1, y1)
-        return [np.array([bbox[1], bbox[0], bbox[3], bbox[2], bbox[4]]) for bbox in bbox_list]
+        return [np.array([bbox[1], bbox[0], bbox[3], bbox[2], bbox[4]], dtype=float) for bbox in bbox_list]
     
     #@staticmethod
     #def preprocess_mtcnn_bbox(bbox_list):
