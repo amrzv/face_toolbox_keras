@@ -7,23 +7,10 @@ https://github.com/myutwo150/keras-inception-resnet-v2/blob/master/inception_res
 """
 from functools import partial
 
-from keras.models import Model
-from keras.layers import Activation
-from keras.layers import BatchNormalization
-from keras.layers import Concatenate
-from keras.layers import Conv2D
-from keras.layers import Dense
-from keras.layers import Dropout
-from keras.layers import GlobalAveragePooling2D
-from keras.layers import Input
-from keras.layers import Lambda
-from keras.layers import MaxPooling2D
-from keras.layers import add
-from keras import backend as K
-
-
-def scaling(x, scale):
-    return x * scale
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Activation, BatchNormalization, Concatenate, Conv2D, Dense, Dropout, GlobalAveragePooling2D, Input, MaxPooling2D, Add
+from tensorflow.keras import backend as K
+from tensorflow.keras.layers.experimental.preprocessing import Rescaling
 
 
 def conv2d_bn(x,
@@ -99,10 +86,8 @@ def _inception_resnet_block(x, scale, block_type, block_idx, activation='relu'):
                    activation=None,
                    use_bias=True,
                    name=name_fmt('Conv2d_1x1'))
-    up = Lambda(scaling,
-                output_shape=K.int_shape(up)[1:],
-                arguments={'scale': scale})(up)
-    x = add([x, up])
+    up = Rescaling(scale)(up)
+    x = Add()([x, up])
     if activation is not None:
         x = Activation(activation, name=name_fmt('Activation'))(x)
     return x
