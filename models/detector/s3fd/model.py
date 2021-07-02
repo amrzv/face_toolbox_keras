@@ -1,5 +1,7 @@
-from keras.models import *
-from keras.layers import *
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Layer, Conv2D, InputSpec, Input, MaxPooling2D, ZeroPadding2D, Lambda, Concatenate
+from tensorflow.keras import initializers
+from tensorflow.keras import backend as K
 import tensorflow as tf
 
 class L2Norm(Layer):
@@ -17,10 +19,10 @@ class L2Norm(Layer):
     def build(self, input_shape):
         self.input_spec = [InputSpec(shape=input_shape)]
         self.gamma = K.variable(self.gamma_init((self.n_channels,)), name='{}_gamma'.format(self.name))
-        self.trainable_weights = [self.gamma]
+        self._trainable_weights = [self.gamma]
         self.built = True
 
-    def call(self, x, mask=None):
+    def call(self, x):
         norm = K.sqrt(K.sum(K.square(x), axis=-1, keepdims=True)) + K.epsilon()
         x = x / norm * self.gamma
         return x
@@ -67,12 +69,12 @@ def s3fd_keras():
     fc7 = Conv2D(filters=1024, kernel_size=1, name="fc7", activation="relu")(fc6)
     ffc7 = fc7
     conv6_1 = Conv2D(filters=256, kernel_size=1, name="conv6_1", activation="relu")(fc7)
-    f6_1 = conv6_1
+    # f6_1 = conv6_1
     conv6_2 = ZeroPadding2D()(conv6_1)
     conv6_2 = Conv2D(filters=512, kernel_size=3, strides=2, name="conv6_2", activation="relu")(conv6_2)
     f6_2 = conv6_2
     conv7_1 = Conv2D(filters=128, kernel_size=1, name="conv7_1", activation="relu")(f6_2)
-    f7_1 = conv7_1
+    # f7_1 = conv7_1
     conv7_2 = ZeroPadding2D()(conv7_1)
     conv7_2 = Conv2D(filters=256, kernel_size=3, strides=2, name="conv7_2", activation="relu")(conv7_2)
     f7_2 = conv7_2
